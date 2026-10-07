@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAG + LLM Interactive Playground</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #9ba7b4;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --warn: #d29922;
+    --pink: #ff7b9c;
+    --purple: #bc8cff;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  header {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #11161d, #0d1117);
+  }
+  header h1 { margin: 0 0 6px; font-size: 26px; }
+  header p { margin: 0; color: var(--muted); max-width: 820px; }
+  .tabs {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    padding: 0 24px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .tab {
+    padding: 12px 18px; cursor: pointer; color: var(--muted);
+    border-bottom: 2px solid transparent; font-weight: 600; font-size: 14px;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+  section.view { display: none; }
+  section.view.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+  h2 { font-size: 22px; margin-top: 0; border-left: 3px solid var(--accent); padding-left: 10px; }
+  h3 { font-size: 17px; color: var(--accent); margin: 26px 0 8px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px; margin: 16px 0;
+  }
+  .lead { color: var(--muted); font-size: 15px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px){ .grid2 { grid-template-columns: 1fr; } }
+  label.ctl { display: block; margin: 14px 0 4px; font-size: 13px; font-weight: 600; color: var(--text); }
+  label.ctl .val { color: var(--accent2); font-family: var(--mono); float: right; }
+  input[type=range]{ width: 100%; accent-color: var(--accent); }
+  input[type=text], textarea, select {
+    width: 100%; background: var(--panel2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 7px; padding: 9px 11px; font-size: 14px;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 70px; font-family: var(--mono); font-size: 13px; }
+  button {
+    background: var(--accent); color: #04121f; border: none; border-radius: 7px;
+    padding: 9px 16px; font-weight: 700; cursor: pointer; font-size: 14px;
+  }
+  button:hover { filter: brightness(1.1); }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .mono { font-family: var(--mono); }
+  .hint { font-size: 12.5px; color: var(--muted); margin: 4px 0 0; }
+  .token { display: inline-block; padding: 2px 7px; margin: 2px; border-radius: 5px;
+    background: var(--panel2); border: 1px solid var(--border); font-family: var(--mono); font-size: 13px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:20px; font-size:11px; font-weight:700;
+    background:#1f6feb33; color:var(--accent); border:1px solid #1f6feb55; margin-left:6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+  th { color: var(--muted); font-weight: 600; }
+  .bar { height: 10px; background: linear-gradient(90deg, var(--accent), var(--purple)); border-radius: 5px; }
+  .barwrap { background: var(--panel2); border-radius: 5px; overflow: hidden; }
+  .glossary dt { font-weight: 700; color: var(--accent); margin-top: 12px; font-family: var(--mono); }
+  .glossary dd { margin: 2px 0 0; color: var(--muted); }
+  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin: 10px 0; }
+  .flow .step { background: var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px; }
+  .flow .arrow { color: var(--accent); font-weight:700; }
+  code.inline { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-family: var(--mono); font-size: 13px; color: var(--pink); }
+  .note { border-left: 3px solid var(--warn); background: #d2992215; padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 14px; }
+  .ok { color: var(--accent2); }
+  .retrieved { border-left: 3px solid var(--accent2); background:#3fb95012; padding:8px 12px; margin:8px 0; border-radius:0 8px 8px 0; font-size:13px; }
+  ul.tight li { margin: 3px 0; }
+  .kbd { font-family: var(--mono); background:#30363d; padding:1px 6px; border-radius:4px; font-size:12px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>RAG + LLM Interactive Playground</h1>
+  <p>A hands-on lab that breaks down Retrieval-Augmented Generation and Large Language Models into every moving part. Tweak the knobs, watch the math, and build intuition. Everything runs locally in your browser — no API keys, no server.</p>
+</header>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-view="overview">① Overview</div>
+  <div class="tab" data-view="tokenize">② Tokenizer</div>
+  <div class="tab" data-view="embed">③ Embeddings</div>
+  <div class="tab" data-view="sampling">④ LLM Sampling</div>
+  <div class="tab" data-view="rag">⑤ RAG Pipeline</div>
+  <div class="tab" data-view="glossary">⑥ Glossary</div>
+</div>
+
+<main>
+  <!-- ===================== OVERVIEW ===================== -->
+  <section class="view active" id="overview">
+    <h2>The Big Picture</h2>
+    <p class="lead">An <b>LLM</b> (Large Language Model) is a neural network that predicts the next token given previous tokens. <b>RAG</b> wraps an LLM with a retrieval step so it can answer using <i>your</i> documents instead of only what it memorized during training.</p>
+
+    <div class="card">
+      <h3>How a plain LLM answers</h3>
+      <div class="flow">
+        <span class="step">Your prompt (text)</span><span class="arrow">→</span>
+        <span class="step">Tokenizer</span><span class="arrow">→</span>
+        <span class="step">Embeddings</span><span class="arrow">→</span>
+        <span class="step">Transformer layers (attention)</span><span class="arrow">→</span>
+        <span class="step">Logits</span><span class="arrow">→</span>
+        <span class="step">Sampling</span><span class="arrow">→</span>
+        <span class="step">Next token</span>
+      </div>
+      <p class="hint">The last two steps repeat token-by-token until a stop condition. Explore each stage in tabs ②–④.</p>
+    </div>
+
+    <div class="card">
+      <h3>How RAG answers</h3>
+      <div class="flow">
+        <span class="step">Question</span><span class="arrow">→</span>
+        <span class="step">Embed query</span><span class="arrow">→</span>
+        <span class="step">Vector search over chunks</span><span class="arrow">→</span>
+        <span class="step">Top-k context</span><span class="arrow">→</span>
+        <span class="step">Prompt = context + question</span><span class="arrow">→</span>
+        <span class="step">LLM</span><span class="arrow">→</span>
+        <span class="step">Grounded answer</span>
+      </div>
+      <p class="hint">RAG = <b>Retrieve</b> relevant text, then <b>Augment</b> the prompt, then <b>Generate</b>. Explore in tab ⑤.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Why RAG exists</h3>
+        <ul class="tight">
+          <li>LLMs have a <b>training cutoff</b> — no knowledge of recent/private data.</li>
+          <li><b>Hallucination</b>: models invent facts. Grounding in real text reduces this.</li>
+          <li><b>Updateable</b>: change the documents, not the model weights.</li>
+          <li><b>Citations</b>: you can show <i>where</i> an answer came from.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>The variables you'll meet</h3>
+        <ul class="tight">
+          <li><code class="inline">temperature</code>, <code class="inline">top_k</code>, <code class="inline">top_p</code> — randomness controls</li>
+          <li><code class="inline">chunk_size</code>, <code class="inline">overlap</code> — how docs are split</li>
+          <li><code class="inline">k</code> — how many chunks to retrieve</li>
+          <li><code class="inline">embedding dim</code> — vector length</li>
+          <li><code class="inline">cosine similarity</code> — the match score</li>
+          <li><code class="inline">context window</code> — token budget</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="note">💡 Work left-to-right through the tabs. Each one is interactive and feeds intuition for the next.</div>
+  </section>
+
+  <!-- ===================== TOKENIZER ===================== -->
+  <section class="view" id="tokenize">
+    <h2>② Tokenizer — turning text into numbers</h2>
+    <p class="lead">LLMs don't see letters. Text is split into <b>tokens</b> (word pieces), and each token maps to an integer <b>token ID</b> from a fixed <b>vocabulary</b>. This toy uses a simple word/sub-word splitter so you can see the idea.</p>
+
+    <div class="card">
+      <label class="ctl" for="tokText">Input text</label>
+      <textarea id="tokText">Retrieval-Augmented Generation grounds the model's answers in real documents.</textarea>
+
+      <label class="ctl">Granularity <span class="val" id="granLbl">sub-word</span></label>
+      <select id="gran">
+        <option value="word">word-level (split on spaces/punct)</option>
+        <option value="subword" selected>sub-word (split long words too)</option>
+        <option value="char">character-level</option>
+      </select>
+      <p class="hint">Real tokenizers (BPE, WordPiece, SentencePiece) learn merges from data. Fewer tokens = cheaper + fits more in the context window.</p>
+
+      <div style="margin-top:14px">
+        <button id="tokBtn">Tokenize</button>
+        <span class="pill" id="tokCount">0 tokens</span>
+      </div>
+
+      <h3>Tokens</h3>
+      <div id="tokOut"></div>
+
+      <h3>Token IDs (vocabulary lookup)</h3>
+      <div id="tokIds" class="mono" style="font-size:13px; color:var(--muted)"></div>
+    </div>
+
+    <div class="note">A rough rule for English: <b>1 token ≈ 4 characters ≈ ¾ of a word</b>. A "4,000 token context" is roughly 3,000 words.</div>
+  </section>
+
+  <!-- ===================== EMBEDDINGS ===================== -->
+  <section class="view" id="embed">
+    <h2>③ Embeddings — meaning as a vector</h2>
+    <p class="lead">An <b>embedding</b> turns a piece of text into a list of numbers (a vector) so that <i>similar meanings sit close together</i> in space. RAG retrieval is just finding the vectors nearest to your query vector.</p>
+
+    <div class="card">
+      <label class="ctl">Embedding dimension <span class="val" id="dimLbl">24</span></label>
+      <input type="range" id="dim" min="4" max="64" value="24" step="4">
+      <p class="hint">Real models use 384, 768, 1536… dimensions. More dims = more nuance, more storage, slower search. Here we keep it tiny and deterministic so you can see the vector.</p>
+
+      <div class="grid2">
+        <div>
+          <label class="ctl" for="embA">Text A</label>
+          <input type="text" id="embA" value="the cat sat on the mat">
+        </div>
+        <div>
+          <label class="ctl" for="embB">Text B</label>
+          <input type="text" id="embB" value="a kitten rested on the rug">
+        </div>
+      </div>
+      <div style="margin-top:12px"><button id="embBtn">Embed &amp; Compare</button></div>
+
+      <h3>Cosine similarity <span class="pill" id="cosPill">—</span></h3>
+      <div class="barwrap" style="height:14px"><div class="bar" id="cosBar" style="width:0%"></div></div>
+      <p class="hint" id="cosHint">Cosine similarity ranges from -1 (opposite) to 1 (identical direction). RAG ranks chunks by this score.</p>
+
+      <h3>Vector A (first 24 dims)</h3>
+      <div id="vecA" class="mono" style="font-size:12px; color:var(--purple); word-break:break-all"></div>
+      <h3>Vector B</h3>
+      <div id="vecB" class="mono" style="font-size:12px; color:var(--pink); word-break:break-all"></div>
+    </div>
+
+    <div class="card">
+      <h3>The cosine formula</h3>
+      <p class="mono" style="color:var(--accent2)">cos(A,B) = (A · B) / (‖A‖ × ‖B‖)</p>
+      <p class="hint">Dot product of the two vectors, divided by the product of their lengths. It measures the <b>angle</b> between them, ignoring magnitude — so "cat" and "CAT CAT CAT" point the same way.</p>
+    </div>
+  </section>
+
+  <!-- ===================== SAMPLING ===================== -->
+  <section class="view" id="sampling">
+    <h2>④ LLM Sampling — how the next word is chosen</h2>
+    <p class="lead">The model outputs a raw score (<b>logit</b>) for every token in the vocabulary. <b>Softmax</b> turns logits into probabilities. Then <b>temperature</b>, <b>top-k</b>, and <b>top-p</b> decide how adventurous the pick is. Press <b>Sample</b> repeatedly to feel the randomness.</p>
+
+    <div class="card">
+      <div class="grid2">
+        <div>
+          <label class="ctl">Temperature <span class="val" id="tempLbl">0.80</span></label>
+          <input type="range" id="temp" min="0" max="2" value="0.8" step="0.05">
+          <p class="hint">0 = greedy/deterministic (always the top token). High = flatter distribution, more creative & more random.</p>
+        </div>
+        <div>
+          <label class="ctl">Top-k <span class="val" id="topkLbl">5</span></label>
+          <input type="range" id="topk" min="1" max="8" value="5" step="1">
+          <p class="hint">Keep only the k highest-probability tokens, discard the rest, then sample.</p>
+        </div>
+      </div>
+      <label class="ctl">Top-p (nucleus) <span class="val" id="toppLbl">1.00</span></label>
+      <input type="range" id="topp" min="0.1" max="1" value="1" step="0.05">
+      <p class="hint">Keep the smallest set of tokens whose probabilities add up to p, then sample. 1.0 = off.</p>
+
+      <div style="margin-top:12px">
+        <button id="sampleBtn">🎲 Sample next token</button>
+        <button class="ghost" id="resetSample">Reset</button>
+        <span class="pill" id="pickedPill">picked: —</span>
+      </div>
+
+      <h3>Context: <span class="mono" style="color:var(--accent2)">"The weather today is ___"</span></h3>
+      <table>
+        <thead><tr><th>token</th><th>logit</th><th>prob after temp/k/p</th><th style="width:40%"></th></tr></thead>
+        <tbody id="probTable"></tbody>
+      </table>
+      <p class="hint">Grey rows were filtered out by top-k / top-p and can't be chosen.</p>
+    </div>
+
+    <div class="note">Try: set <b>temperature = 0</b> → the pick never changes (greedy decoding). Set <b>temperature = 1.8, top-k = 8</b> → wild variety. Set <b>top-p = 0.5</b> → only the most likely tokens survive.</div>
+  </section>
+
+  <!-- ===================== RAG ===================== -->
+  <section class="view" id="rag">
+    <h2>⑤ RAG Pipeline — end to end</h2>
+    <p class="lead">Paste a knowledge base, ask a question, and watch chunking → embedding → retrieval → prompt assembly → a grounded (template) answer. Every knob is live.</p>
+
+    <div class="card">
+      <h3>Step 1 · Knowledge base</h3>
+      <textarea id="kb" style="min-height:120px">Kiro is an AI development environment that writes code with you. 
+It supports two session types: Vibe for conversational coding and Spec for structured requirements, design, and tasks. 
+Steering files live in .kiro/steering and inject project context into every chat. 
+Hooks automate agent actions on IDE events like saving a file. 
+MCP (Model Context Protocol) lets Kiro connect to external tools and servers. 
+The context window is the maximum number of tokens the model can read at once. 
+RAG retrieves relevant chunks and augments the prompt before generation.</textarea>
+      <p class="hint">Each line/sentence becomes source material. In production this is PDFs, wikis, tickets, etc.</p>
+    </div>
+
+    <div class="card">
+      <h3>Step 2 · Chunking</h3>
+      <div class="grid2">
+        <div>
+          <label class="ctl">Chunk size (words) <span class="val" id="csLbl">12</span></label>
+          <input type="range" id="cs" min="4" max="30" value="12" step="1">
+          <p class="hint">Too big = noisy, wastes context. Too small = loses meaning. Common: 200–500 tokens.</p>
+        </div>
+        <div>
+          <label class="ctl">Overlap (words) <span class="val" id="ovLbl">3</span></label>
+          <input type="range" id="ov" min="0" max="10" value="3" step="1">
+          <p class="hint">Repeated words at chunk edges so a sentence split across chunks isn't lost.</p>
+        </div>
+      </div>
+      <div id="chunksOut"></div>
+    </div>
+
+    <div class="card">
+      <h3>Step 3 · Query &amp; retrieval</h3>
+      <label class="ctl" for="query">Your question</label>
+      <input type="text" id="query" value="What are hooks in Kiro?">
+      <div class="grid2" style="margin-top:10px">
+        <div>
+          <label class="ctl">Top-k chunks to retrieve <span class="val" id="kLbl">3</span></label>
+          <input type="range" id="k" min="1" max="6" value="3" step="1">
+        </div>
+        <div>
+          <label class="ctl">Min similarity threshold <span class="val" id="thLbl">0.00</span></label>
+          <input type="range" id="th" min="0" max="0.6" value="0" step="0.02">
+          <p class="hint">Drop weak matches below this score to avoid irrelevant context.</p>
+        </div>
+      </div>
+      <div style="margin-top:12px"><button id="ragBtn">🔍 Run RAG</button></div>
+
+      <h3>Retrieved context (ranked by cosine)</h3>
+      <div id="retrieved"></div>
+    </div>
+
+    <div class="card">
+      <h3>Step 4 · Assembled prompt (what the LLM actually sees)</h3>
+      <pre id="finalPrompt" class="mono" style="white-space:pre-wrap; background:var(--panel2); padding:14px; border-radius:8px; font-size:12.5px; color:var(--muted)"></pre>
+      <h3>Step 5 · Generated answer <span class="pill">template demo</span></h3>
+      <div id="ragAnswer" class="retrieved"></div>
+      <p class="hint">This demo synthesizes the answer from retrieved text (no real model). In production the assembled prompt goes to an actual LLM. The point is to see what the model is <i>given</i>.</p>
+    </div>
+  </section>
+
+  <!-- ===================== GLOSSARY ===================== -->
+  <section class="view" id="glossary">
+    <h2>⑥ Glossary — every variable, in plain English</h2>
+    <dl class="glossary">
+      <dt>Token</dt><dd>A word-piece. The atomic unit an LLM reads and writes.</dd>
+      <dt>Vocabulary</dt><dd>The fixed set of all tokens a model knows (e.g. ~50k–200k).</dd>
+      <dt>Token ID</dt><dd>Integer index of a token in the vocabulary.</dd>
+      <dt>Embedding</dt><dd>A vector of floats representing meaning. Similar text → nearby vectors.</dd>
+      <dt>Embedding dimension</dt><dd>How many numbers per vector (384/768/1536…). Higher = more nuance.</dd>
+      <dt>Cosine similarity</dt><dd>Angle-based score (−1…1) measuring how aligned two vectors are. The core retrieval metric.</dd>
+      <dt>Vector database</dt><dd>Store optimized for nearest-neighbor search over embeddings (e.g. FAISS, Pinecone, pgvector).</dd>
+      <dt>Logit</dt><dd>Raw, unnormalized score the model assigns each candidate next token.</dd>
+      <dt>Softmax</dt><dd>Function turning logits into a probability distribution that sums to 1.</dd>
+      <dt>Temperature</dt><dd>Scales logits before softmax. Low = confident/deterministic, high = random/creative.</dd>
+      <dt>Top-k</dt><dd>Only sample from the k most probable tokens.</dd>
+      <dt>Top-p (nucleus)</dt><dd>Only sample from the smallest group of tokens whose probabilities sum to p.</dd>
+      <dt>Greedy decoding</dt><dd>Always pick the single highest-probability token (temperature = 0).</dd>
+      <dt>Context window</dt><dd>Max tokens the model can read at once (prompt + retrieved context + answer).</dd>
+      <dt>Chunk</dt><dd>A slice of a document stored and retrieved as one unit.</dd>
+      <dt>Chunk overlap</dt><dd>Shared words between adjacent chunks so meaning isn't cut off.</dd>
+      <dt>k (retrieval)</dt><dd>Number of chunks pulled back for a query.</dd>
+      <dt>Similarity threshold</dt><dd>Minimum score a chunk needs to be included.</dd>
+      <dt>Prompt augmentation</dt><dd>Injecting retrieved context into the prompt before generation — the "A" in RAG.</dd>
+      <dt>Grounding</dt><dd>Forcing answers to come from supplied sources, reducing hallucination.</dd>
+      <dt>Hallucination</dt><dd>When a model states something false or unsupported with confidence.</dd>
+      <dt>Training cutoff</dt><dd>Date after which the base model knows nothing — the gap RAG fills.</dd>
+    </dl>
+
+    <div class="card">
+      <h3>Where to go next (real tools)</h3>
+      <ul class="tight">
+        <li><b>LLMs / APIs:</b> OpenAI, Anthropic, Llama (local via Ollama), Mistral</li>
+        <li><b>Embeddings:</b> sentence-transformers, OpenAI text-embedding-3, Cohere</li>
+        <li><b>Vector DBs:</b> FAISS, Chroma, pgvector, Pinecone, Weaviate, Qdrant</li>
+        <li><b>Frameworks:</b> LangChain, LlamaIndex, Haystack</li>
+        <li><b>Play with tokenizers:</b> search "tiktoken" (Python) or the OpenAI tokenizer tool</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ---------------- Tab switching ---------------- */
+document.getElementById('tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.view).classList.add('active');
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+/* ---------------- Shared helpers ---------------- */
+// Deterministic string hash -> seed
+function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
+// Simple seeded PRNG (mulberry32)
+function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function clean(w){ return w.toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+// Bag-of-words embedding: each unique word contributes a deterministic random vector; averaged.
+function embed(text, dim){
+  const words = text.toLowerCase().split(/\s+/).map(clean).filter(Boolean);
+  const v = new Array(dim).fill(0);
+  if(!words.length) return v;
+  for(const w of words){
+    const r = rng(hashStr(w));
+    for(let i=0;i<dim;i++) v[i]+= (r()*2-1);
+  }
+  for(let i=0;i<dim;i++) v[i]/=words.length;
+  return v;
+}
+function cosine(a,b){
+  let dot=0,na=0,nb=0;
+  for(let i=0;i<a.length;i++){ dot+=a[i]*b[i]; na+=a[i]*a[i]; nb+=b[i]*b[i]; }
+  if(na===0||nb===0) return 0;
+  return dot/(Math.sqrt(na)*Math.sqrt(nb));
+}
+
+/* ---------------- Tokenizer ---------------- */
+const tokText=document.getElementById('tokText'), gran=document.getElementById('gran');
+function tokenize(){
+  const mode=gran.value, text=tokText.value;
+  document.getElementById('granLbl').textContent = gran.options[gran.selectedIndex].text.split(' ')[0];
+  let toks=[];
+  if(mode==='char'){ toks=[...text].filter(c=>c!=='\n'); }
+  else {
+    const raw=text.match(/[A-Za-z0-9]+|[^\sA-Za-z0-9]/g)||[];
+    if(mode==='word'){ toks=raw; }
+    else { // subword: break tokens longer than 5 chars into ~4-char pieces with ## marker
+      for(const w of raw){
+        if(/[A-Za-z0-9]/.test(w) && w.length>5){
+          for(let i=0;i<w.length;i+=4){ toks.push((i>0?'##':'')+w.slice(i,i+4)); }
+        } else toks.push(w);
+      }
+    }
+  }
+  const out=document.getElementById('tokOut'); out.innerHTML='';
+  const palette=['#1f6feb33','#3fb95033','#bc8cff33','#ff7b9c33','#d2992233'];
+  toks.forEach((t,i)=>{
+    const span=document.createElement('span');
+    span.className='token'; span.textContent=t;
+    span.style.background=palette[i%palette.length];
+    out.appendChild(span);
+  });
+  document.getElementById('tokCount').textContent = toks.length+' tokens';
+  document.getElementById('tokIds').textContent = '[ '+toks.map(t=>hashStr(clean(t)||t)%50000).join(', ')+' ]';
+}
+document.getElementById('tokBtn').addEventListener('click',tokenize);
+gran.addEventListener('change',tokenize);
+tokenize();
+
+/* ---------------- Embeddings ---------------- */
+const dim=document.getElementById('dim');
+function runEmbed(){
+  const d=+dim.value; document.getElementById('dimLbl').textContent=d;
+  const a=embed(document.getElementById('embA').value,d);
+  const b=embed(document.getElementById('embB').value,d);
+  const c=cosine(a,b);
+  document.getElementById('cosPill').textContent=c.toFixed(3);
+  document.getElementById('cosBar').style.width=Math.max(0,c*100)+'%';
+  document.getElementById('vecA').textContent='['+a.slice(0,24).map(x=>x.toFixed(2)).join(', ')+(d>24?', …':'')+']';
+  document.getElementById('vecB').textContent='['+b.slice(0,24).map(x=>x.toFixed(2)).join(', ')+(d>24?', …':'')+']';
+  const h=document.getElementById('cosHint');
+  if(c>0.6) h.textContent='High similarity — these would be retrieved together.';
+  else if(c>0.3) h.textContent='Moderate overlap in meaning.';
+  else h.textContent='Low similarity — different topics (or too few shared words in this toy model).';
+}
+document.getElementById('embBtn').addEventListener('click',runEmbed);
+dim.addEventListener('input',runEmbed);
+runEmbed();
+
+/* ---------------- Sampling ---------------- */
+const VOCAB=[
+  {t:'sunny', logit:3.2},{t:'cloudy', logit:2.6},{t:'rainy', logit:2.1},
+  {t:'cold', logit:1.4},{t:'warm', logit:1.1},{t:'perfect', logit:0.5},
+  {t:'purple', logit:-0.8},{t:'banana', logit:-2.0}
+];
+const temp=document.getElementById('temp'), topk=document.getElementById('topk'), topp=document.getElementById('topp');
+function softmax(logits){ const m=Math.max(...logits); const ex=logits.map(l=>Math.exp(l-m)); const s=ex.reduce((a,b)=>a+b,0); return ex.map(e=>e/s); }
+function computeDist(){
+  const T=Math.max(+temp.value,0.0001);
+  document.getElementById('tempLbl').textContent=(+temp.value).toFixed(2);
+  document.getElementById('topkLbl').textContent=topk.value;
+  document.getElementById('toppLbl').textContent=(+topp.value).toFixed(2);
+
+  // temperature scaling
+  let scaled = VOCAB.map(v=>({...v, s:(+temp.value===0? (v.logit===Math.max(...VOCAB.map(x=>x.logit))?50:-50) : v.logit/T)}));
+  let probs = softmax(scaled.map(v=>v.s));
+  let rows = VOCAB.map((v,i)=>({t:v.t, logit:v.logit, p:probs[i], kept:true}));
+  // sort by prob desc
+  rows.sort((a,b)=>b.p-a.p);
+  // top-k
+  const K=+topk.value;
+  rows.forEach((r,i)=>{ if(i>=K) r.kept=false; });
+  // top-p over kept
+  const P=+topp.value; let cum=0;
+  for(const r of rows){ if(!r.kept) continue; if(cum>=P){ r.kept=false; } cum+=r.p; }
+  // renormalize kept
+  const keptSum=rows.filter(r=>r.kept).reduce((a,r)=>a+r.p,0)||1;
+  rows.forEach(r=> r.pn = r.kept ? r.p/keptSum : 0);
+  return rows;
+}
+function renderTable(){
+  const rows=computeDist();
+  const tb=document.getElementById('probTable'); tb.innerHTML='';
+  for(const r of rows){
+    const tr=document.createElement('tr');
+    tr.style.opacity=r.kept?'1':'0.35';
+    tr.innerHTML=`<td>${r.t}</td><td>${r.logit.toFixed(1)}</td><td>${(r.pn*100).toFixed(1)}%</td>
+      <td><div class="barwrap"><div class="bar" style="width:${(r.pn*100).toFixed(1)}%; background:${r.kept?'linear-gradient(90deg,#58a6ff,#bc8cff)':'#444'}"></div></div></td>`;
+    tb.appendChild(tr);
+  }
+  return rows;
+}
+function sample(){
+  const rows=renderTable();
+  const kept=rows.filter(r=>r.kept);
+  let x=Math.random(), cum=0, picked=kept[0];
+  for(const r of kept){ cum+=r.pn; if(x<=cum){ picked=r; break; } }
+  document.getElementById('pickedPill').textContent='picked: '+picked.t;
+}
+[temp,topk,topp].forEach(el=>el.addEventListener('input',renderTable));
+document.getElementById('sampleBtn').addEventListener('click',sample);
+document.getElementById('resetSample').addEventListener('click',()=>{temp.value=0.8;topk.value=5;topp.value=1;renderTable();document.getElementById('pickedPill').textContent='picked: —';});
+renderTable();
+
+/* ---------------- RAG ---------------- */
+const cs=document.getElementById('cs'), ov=document.getElementById('ov'), kk=document.getElementById('k'), th=document.getElementById('th');
+function makeChunks(){
+  document.getElementById('csLbl').textContent=cs.value;
+  document.getElementById('ovLbl').textContent=ov.value;
+  document.getElementById('kLbl').textContent=kk.value;
+  document.getElementById('thLbl').textContent=(+th.value).toFixed(2);
+  const words=document.getElementById('kb').value.replace(/\s+/g,' ').trim().split(' ');
+  const size=+cs.value, overlap=Math.min(+ov.value, size-1);
+  const chunks=[]; let i=0;
+  while(i<words.length){ chunks.push(words.slice(i,i+size).join(' ')); i+=(size-overlap); }
+  const out=document.getElementById('chunksOut');
+  out.innerHTML='<p class="hint">'+chunks.length+' chunks created:</p>'+
+    chunks.map((c,idx)=>`<div class="retrieved" style="border-left-color:var(--purple);background:#bc8cff10"><b>chunk ${idx}</b> · ${c}</div>`).join('');
+  return chunks;
+}
+function runRAG(){
+  const chunks=makeChunks();
+  const d=24;
+  const q=document.getElementById('query').value;
+  const qv=embed(q,d);
+  let scored=chunks.map((c,idx)=>({idx,text:c,score:cosine(qv,embed(c,d))}));
+  scored.sort((a,b)=>b.score-a.score);
+  const K=+kk.value, T=+th.value;
+  const top=scored.filter(s=>s.score>=T).slice(0,K);
+  const rdiv=document.getElementById('retrieved');
+  rdiv.innerHTML = top.length? top.map(s=>`<div class="retrieved"><b>cos ${s.score.toFixed(3)}</b> · chunk ${s.idx}: ${s.text}</div>`).join('')
+    : '<p class="hint" style="color:var(--warn)">No chunks passed the threshold. Lower it or rephrase the query.</p>';
+  // assembled prompt
+  const ctx = top.map((s,i)=>`[${i+1}] ${s.text}`).join('\n');
+  const prompt =
+`SYSTEM: Answer ONLY using the context below. If missing, say you don't know.
+
+CONTEXT:
+${ctx||'(none)'}
+
+QUESTION: ${q}
+
+ANSWER:`;
+  document.getElementById('finalPrompt').textContent=prompt;
+  // template "answer"
+  const ans = top.length
+    ? `Based on the retrieved context, here is the grounded answer: ${top[0].text}` + (top[1]?` Additionally: ${top[1].text}`:'')
+    : `I don't have enough information in the knowledge base to answer that.`;
+  document.getElementById('ragAnswer').textContent=ans;
+}
+[cs,ov,kk,th].forEach(el=>el.addEventListener('input',makeChunks));
+document.getElementById('ragBtn').addEventListener('click',runRAG);
+makeChunks(); runRAG();
+</script>
+</body>
+</html>
